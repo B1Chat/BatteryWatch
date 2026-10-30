@@ -1,2 +1,90 @@
 # BatteryWatch
-Battery status system tray for 2.4G protocol connection of ROG PELTA, CHERRY PIXIU 75 &amp; GPW wireless devices
+
+Windows 托盘外设电量监视器。用三段式托盘图标显示三款 2.4G 无线外设的剩余电量，鼠标停留 0.5 秒弹出仿 Windows 11 风格的深色卡片。
+
+做这个工具的原因很直接：三款外设分属三个品牌，想看电量就得同时常驻 Armoury Crate、CHERRY Utility 和 G HUB——几个 GB 的进程，只为了看三个数字。
+
+## 功能
+
+- **三段托盘图标**：每段对应一台设备，填充高度表示电量，颜色分级
+- **悬停卡片**：停留 0.5 秒弹出，中途移开则取消；仿 Win11 深色圆角，逐像素 alpha 合成
+- **颜色分级**：>50% 绿、20–50% 橙、<20% 红、充电中蓝、离线灰
+- **不抢焦点**：卡片置顶但不激活，不出现在 Alt+Tab
+- **低电提醒**：≤20% 弹一次，充电后再次跌破阈值才会重弹
+- **开机自启**：右键菜单勾选，写 HKCU Run
+- **休眠保留**：设备休眠时保留上次读数，不会在「有值 / 离线」之间来回跳
+
+## 支持设备
+
+| 设备 | 连接 | 协议 | 验证状态 |
+|---|---|---|---|
+| Cherry PIXIU 75 | 2.4G 接收器 `046A:01E4` | 厂商 HID，Report 4，payloadType `0x1A` | 真机验证 |
+| ROG 破风（ROG Pelta） | 2.4G 接收器 `0B05:1B84` | 厂商 HID，Report `0xCC`，命令 `12 07` | 真机验证 |
+| 罗技 G PRO / GPW | LIGHTSPEED `046D:C539` | HID++ 2.0 `0x1001` 电压法 | 真机验证（仅未充电时准确） |
+
+## 运行要求
+
+- Windows 10 / 11 x64
+- .NET Framework 4.5 或更高（系统自带，无需额外安装）
+- 无需管理员权限，无需安装
+
+## 构建与运行
+
+```
+build.cmd     编译，输出 out\BatteryWatch.exe
+rebuild.cmd   停掉旧进程 + 编译 + 启动，改代码后用这个
+```
+
+双击 `build.cmd`，然后运行 `out\BatteryWatch.exe`。
+
+Windows 11 默认把新出现的托盘图标收进「隐藏的图标」：点任务栏的 `^` 展开，把图标拖到任务栏上固定。
+
+## 工作原理
+
+三个读取器实现同一个 `IBatteryReader` 接口，UI 层不关心设备差异。
+
+**Cherry PIXIU 75**
+
+```
+帧格式：   [0]=ReportID(4) [1..2]=checksum LE [3]=payloadType [4..]=payload
+          checksum = sum(bytes[3..63]) & 0xFFFF
+电量查询： payloadType 0x1A，payload [03, 00, 00, 55]
+响应：     数据区从 [7] 开始，电量与 USB 供电标志在第 8、9 字节
+```
+
+**ROG 破风（ROG Pelta）**
+
+```
+查询： CC 12 07 + 补零到 64 字节（WriteFile 到 0xFF00 厂商通道）
+响应： CC 12 07 00 00 | 休眠分钟 | 电量% | 低电阈值 | 语音开关
+```
+
+**罗技 HID++ 2.0**
+
+```
+ROOT.getFeature(0x1001) → feature index（feature id 大端传入）
+feature getVoltage      → 大端 uint16 毫伏
+byte[6] bit7            → 充电中
+```
+
+未充电时按锂电放电曲线换算百分比。充电时端电压被充电电流抬高，不输出百分比。
+
+## 已知限制
+
+- **罗技充电时不显示百分比**。GPW 一代只暴露电池电压，没有库仑计读数；充电时端电压会被抬高约 200 mV，用放电曲线换算会严重虚高（实测真实 17% 会算成 67%）。此时界面显示「充电中」，拔线后恢复准确读数。
+- **设备深度休眠时接收器不代答**，界面显示上一次的读数，不会清零。
+- **只适配上述三款型号**。其他设备需要实现 `IBatteryReader` 后加入 `TrayApp` 的列表。
+
+## 免责声明
+
+**本项目是非官方的第三方工具，与 CHERRY、ASUSTeK（ROG）、Logitech 均无隶属、授权或合作关系。**
+
+- 文中出现的 Cherry、PIXIU、ROG、破风、Pelta、Logitech、G PRO、LIGHTSPEED 等名称与标识，均为其各自所有者的商标，此处仅用于说明硬件兼容性。
+- 设备协议信息来自对**自有设备 HID 通信的观察**，目的是实现互操作。本项目**不包含**任何厂商的源代码、固件、驱动程序或二进制文件。
+- 程序**只读取电量**，不发送任何修改设备配置的命令（灯效、宏、配对、固件升级等）。
+- 设备协议可能随固件更新而变化，届时读取可能失效。
+- 本软件按「现状」提供，不附带任何明示或暗示的担保。使用风险自负，因使用本软件造成的任何直接或间接损失，作者不承担责任。
+
+## 许可证
+
+MIT，详见 [LICENSE](LICENSE)。
