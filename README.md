@@ -1,5 +1,9 @@
 # BatteryWatch
 
+
+![preview](preview.png)
+
+
 Windows 托盘外设电量监视器。用三段式托盘图标显示三款 2.4G 无线外设的剩余电量，鼠标停留 0.5 秒弹出仿 Windows 11 风格的深色卡片。
 
 做这个工具的原因很直接：三款外设分属三个品牌，想看电量就得同时常驻 Armoury Crate、CHERRY Utility 和 G HUB——几个 GB 的进程，只为了看三个数字。
